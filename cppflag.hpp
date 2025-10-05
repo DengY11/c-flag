@@ -1,12 +1,11 @@
 #pragma once
-#include <memory>
 #include <cassert>
+#include <iostream>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
-#include <iostream>
-
 
 namespace cli {
 
@@ -30,21 +29,21 @@ class IValue {
 public:
   virtual ~IValue() = default;
   /* Set parses the string argument and sets the value.
-     It returns true on success and false on failure, setting err to an error message. */
-  virtual bool Set(std::string_view text,
-                   std::string &err) = 0;
+     It returns true on success and false on failure, setting err to an error
+     message. */
+  virtual bool Set(std::string_view text, std::string &err) = 0;
   /* TypeName returns the type name of the value. */
   virtual std::string TypeName() const = 0;
   /* ToString returns the string representation of the value. */
   virtual std::string ToString() const = 0;
   /* clone returns a copy of the value object. */
-  virtual IValue* clone() const = 0;
+  virtual IValue *clone() const = 0;
 };
 
 template <typename T> class ValueAdapter : public IValue {
 public:
   using Tp = std::decay_t<T>;
-  explicit ValueAdapter(T val) : value_(val){
+  explicit ValueAdapter(T val) : value_(val) {
     if constexpr (std::is_same<Tp, int64_t>::value) {
       type_name_ = "int";
     } else if constexpr (std::is_same<Tp, float>::value ||
@@ -60,10 +59,10 @@ public:
     if constexpr (std::is_same<Tp, int64_t>::value) {
       try {
         value_ = std::stoll(std::string(text));
-      } catch (const std::invalid_argument& ia) {
+      } catch (const std::invalid_argument &ia) {
         err = "not an integer";
         return false;
-      } catch (const std::out_of_range& oor) {
+      } catch (const std::out_of_range &oor) {
         err = "out of range for int64_t";
         return false;
       }
@@ -71,10 +70,10 @@ public:
                          std::is_same<Tp, double>::value) {
       try {
         value_ = std::stod(std::string(text));
-      } catch (const std::invalid_argument& ia) {
+      } catch (const std::invalid_argument &ia) {
         err = "not a float";
         return false;
-      } catch (const std::out_of_range& oor) {
+      } catch (const std::out_of_range &oor) {
         err = "out of range for float";
         return false;
       }
@@ -84,10 +83,12 @@ public:
       for (char c : text) {
         lower_text += std::tolower(c);
       }
-      
-      if (lower_text == "true" || lower_text == "1" || lower_text == "yes" || lower_text == "on") {
+
+      if (lower_text == "true" || lower_text == "1" || lower_text == "yes" ||
+          lower_text == "on") {
         value_ = true;
-      } else if (lower_text == "false" || lower_text == "0" || lower_text == "no" || lower_text == "off") {
+      } else if (lower_text == "false" || lower_text == "0" ||
+                 lower_text == "no" || lower_text == "off") {
         value_ = false;
       } else {
         err = "invalid boolean value, accepts true/false, 1/0, yes/no, on/off";
@@ -105,23 +106,22 @@ public:
 
   std::string ToString() const override {
     if constexpr (std::is_same<T, bool>::value) {
-        return value_ ? "true" : "false";
+      return value_ ? "true" : "false";
     } else if constexpr (std::is_same<T, std::string>::value) {
-        return value_;
+      return value_;
     } else {
-        return std::to_string(value_);
+      return std::to_string(value_);
     }
   }
 
   std::string TypeName() const override { return type_name_; }
   const T &Get() const { return value_; }
-  virtual IValue* clone() const override { return new ValueAdapter<T>(value_); }
+  virtual IValue *clone() const override { return new ValueAdapter<T>(value_); }
 
 private:
   T value_;
   std::string type_name_;
 };
-
 
 struct Flag {
   std::string name;
@@ -144,20 +144,29 @@ struct Flag {
 
 class FlagSet {
 public:
-  /* FlagSet creates a new, empty flag set with the specified name and description. */
+  /* FlagSet creates a new, empty flag set with the specified name and
+   * description. */
   explicit FlagSet(std::string name, std::string desc = {});
-  /* Int defines a int64_t flag with specified name, default value, and usage string. */
-  Flag *Int(std::string_view name, int64_t defaultVal, std::string_view usage, char short_name = 0);
-  /* Float defines a double flag with specified name, default value, and usage string. */
-  Flag *Float(std::string_view name, double defaultVal, std::string_view usage, char short_name = 0);
-  /* Bool defines a bool flag with specified name, default value, and usage string. */
-  Flag *Bool(std::string_view name, bool defaultVal, std::string_view usage, char short_name = 0);
-  /* String defines a string flag with specified name, default value, and usage string. */
+  /* Int defines a int64_t flag with specified name, default value, and usage
+   * string. */
+  Flag *Int(std::string_view name, int64_t defaultVal, std::string_view usage,
+            char short_name = 0);
+  /* Float defines a double flag with specified name, default value, and usage
+   * string. */
+  Flag *Float(std::string_view name, double defaultVal, std::string_view usage,
+              char short_name = 0);
+  /* Bool defines a bool flag with specified name, default value, and usage
+   * string. */
+  Flag *Bool(std::string_view name, bool defaultVal, std::string_view usage,
+             char short_name = 0);
+  /* String defines a string flag with specified name, default value, and usage
+   * string. */
   Flag *String(std::string_view name, std::string_view defaultVal,
                std::string_view usage, char short_name = 0);
 
-  /* Parse parses flag definitions from the argument list, which should not include the command name.
-     It returns a ParseResult indicating success or failure. */
+  /* Parse parses flag definitions from the argument list, which should not
+     include the command name. It returns a ParseResult indicating success or
+     failure. */
   ParseResult Parse(int argc, char **argv);
   /* Lookup returns the Flag structure for a flag, or nullptr if not found. */
   const Flag *Lookup(std::string_view name) const;
@@ -180,7 +189,8 @@ private:
   std::unordered_map<char, Flag *> short_index_;
   std::vector<std::string> positional_;
   template <typename T>
-  Flag* AddFlag(std::string_view name, char short_name, T defaultVal, std::string_view usage);
+  Flag *AddFlag(std::string_view name, char short_name, T defaultVal,
+                std::string_view usage);
 };
 
 FlagSet::FlagSet(std::string name, std::string desc) {
@@ -190,7 +200,8 @@ FlagSet::FlagSet(std::string name, std::string desc) {
 }
 
 template <typename T>
-Flag* FlagSet::AddFlag(std::string_view name, char short_name, T defaultVal, std::string_view usage) {
+Flag *FlagSet::AddFlag(std::string_view name, char short_name, T defaultVal,
+                       std::string_view usage) {
   auto ptr = std::make_unique<Flag>();
   ptr->name = name;
   ptr->usage = usage;
@@ -200,10 +211,10 @@ Flag* FlagSet::AddFlag(std::string_view name, char short_name, T defaultVal, std
   ptr->value = std::move(v_ptr);
   ptr->set = false;
   this->flags_.emplace_back(std::move(ptr));
-  Flag* flag_ptr = this->flags_.back().get();
+  Flag *flag_ptr = this->flags_.back().get();
   this->index_[name] = flag_ptr;
   if (short_name != 0) {
-      this->short_index_[short_name] = flag_ptr;
+    this->short_index_[short_name] = flag_ptr;
   }
   return flag_ptr;
 }
@@ -228,45 +239,46 @@ Flag *FlagSet::String(std::string_view name, std::string_view defaultVal,
   return AddFlag<std::string>(name, short_name, std::string(defaultVal), usage);
 }
 
-/* Parse parses flag definitions from the argument list, which should not include the command name.
-     It returns a ParseResult indicating success or failure. */
-ParseResult FlagSet::Parse(int argc, char** argv) {
+/* Parse parses flag definitions from the argument list, which should not
+   include the command name. It returns a ParseResult indicating success or
+   failure. */
+ParseResult FlagSet::Parse(int argc, char **argv) {
   positional_.clear();
   bool no_more_flags = false;
 
-  for (const auto& flag : flags_) {
-      flag->value.reset(flag->default_value->clone());
-      flag->set = false;
+  for (const auto &flag : flags_) {
+    flag->value.reset(flag->default_value->clone());
+    flag->set = false;
   }
-  
+
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
 
     if (arg == "--help" || arg == "-h" || arg == "-help") {
-        return {ParseErrorKind::HelpRequested, "", ""};
+      return {ParseErrorKind::HelpRequested, "", ""};
     }
 
     if (no_more_flags) {
-        positional_.push_back(arg);
-        continue;
+      positional_.push_back(arg);
+      continue;
     }
 
     if (arg == "--") {
-        no_more_flags = true;
-        continue;
+      no_more_flags = true;
+      continue;
     }
-    
+
     // handle positional arguments
     if (arg[0] != '-') {
       positional_.push_back(arg);
       continue;
     }
-    
+
     // handle long options --flag=value or --flag value
     if (arg.size() > 2 && arg[1] == '-') {
       std::string flag_name;
       std::string value;
-      
+
       size_t equal_pos = arg.find('=');
       if (equal_pos != std::string::npos) {
         // --flag=value format
@@ -277,26 +289,30 @@ ParseResult FlagSet::Parse(int argc, char** argv) {
         flag_name = arg.substr(2);
         auto it = index_.find(flag_name);
         if (it != index_.end()) {
-            auto va = dynamic_cast<ValueAdapter<bool>*>(it->second->value.get());
-            if (va) {
-                value = "true";
-            } else if (i + 1 < argc && argv[i + 1][0] != '-') {
-                value = argv[++i];
-            } else {
-                return ParseResult{ParseErrorKind::MissingValue, flag_name, "flag '" + flag_name + "' needs a value"};
-            }
-        } 
+          auto va = dynamic_cast<ValueAdapter<bool> *>(it->second->value.get());
+          if (va) {
+            value = "true";
+          } else if (i + 1 < argc && argv[i + 1][0] != '-') {
+            value = argv[++i];
+          } else {
+            return ParseResult{ParseErrorKind::MissingValue, flag_name,
+                               "flag '" + flag_name + "' needs a value"};
+          }
+        }
       }
-      
+
       auto it = index_.find(flag_name);
       if (it == index_.end()) {
-        return ParseResult{ParseErrorKind::UnknownFlag, flag_name, "unknown flag: " + flag_name};
+        return ParseResult{ParseErrorKind::UnknownFlag, flag_name,
+                           "unknown flag: " + flag_name};
       }
-      
-      Flag* flag = it->second;
+
+      Flag *flag = it->second;
       std::string error;
       if (!flag->value->Set(value, error)) {
-        return ParseResult{ParseErrorKind::InvalidValue, flag_name, "invalid value for flag '" + flag_name + "': " + error};
+        return ParseResult{ParseErrorKind::InvalidValue, flag_name,
+                           "invalid value for flag '" + flag_name +
+                               "': " + error};
       }
       flag->set = true;
     }
@@ -305,34 +321,40 @@ ParseResult FlagSet::Parse(int argc, char** argv) {
       char flag_char = arg[1];
       auto it = short_index_.find(flag_char);
       if (it == short_index_.end()) {
-          return ParseResult{ParseErrorKind::UnknownFlag, std::string(1, flag_char), "unknown flag: -" + std::string(1, flag_char)};
+        return ParseResult{ParseErrorKind::UnknownFlag,
+                           std::string(1, flag_char),
+                           "unknown flag: -" + std::string(1, flag_char)};
       }
-      Flag* flag = it->second;
+      Flag *flag = it->second;
       std::string value;
 
       if (arg.size() > 2) {
-          // -fvalue format
-          value = arg.substr(2);
+        // -fvalue format
+        value = arg.substr(2);
       } else {
-          // -f format, value might be next arg, or implicit for bool
-          auto va = dynamic_cast<ValueAdapter<bool>*>(flag->value.get());
-          if (va) {
-              value = "true";
-          } else if (i + 1 < argc) {
-              value = argv[++i];
-          } else {
-              return ParseResult{ParseErrorKind::MissingValue, flag->name, "flag '-" + std::string(1, flag_char) + "' needs a value"};
-          }
+        // -f format, value might be next arg, or implicit for bool
+        auto va = dynamic_cast<ValueAdapter<bool> *>(flag->value.get());
+        if (va) {
+          value = "true";
+        } else if (i + 1 < argc) {
+          value = argv[++i];
+        } else {
+          return ParseResult{ParseErrorKind::MissingValue, flag->name,
+                             "flag '-" + std::string(1, flag_char) +
+                                 "' needs a value"};
+        }
       }
 
       std::string error;
       if (!flag->value->Set(value, error)) {
-          return ParseResult{ParseErrorKind::InvalidValue, flag->name, "invalid value for flag '-" + std::string(1, flag_char) + "': " + error};
+        return ParseResult{ParseErrorKind::InvalidValue, flag->name,
+                           "invalid value for flag '-" +
+                               std::string(1, flag_char) + "': " + error};
       }
       flag->set = true;
     }
   }
-  
+
   return ParseResult{};
 }
 
@@ -355,20 +377,21 @@ void FlagSet::PrintUsage(std::ostream &os) const {
     os << " [flags]";
   }
   os << "\n";
-  
+
   if (!desc_.empty()) {
     os << desc_ << "\n";
   }
-  
+
   if (!flags_.empty()) {
     os << "\nFlags:\n";
     for (const auto &flag : flags_) {
       os << "  ";
       if (flag->short_name != 0) {
-          os << "-" << flag->short_name << ", ";
+        os << "-" << flag->short_name << ", ";
       }
       os << "--" << flag->name;
-      os << "\t" << flag->usage << " (default: " << flag->default_value->ToString() << ")\n";
+      os << "\t" << flag->usage
+         << " (default: " << flag->default_value->ToString() << ")\n";
     }
   }
 }
@@ -379,13 +402,12 @@ void FlagSet::PrintError(const ParseResult &pr, std::ostream &os) const {
 
 /* Get returns the value of the flag with the given name from the flag set.
    It returns a zero value if the flag is not found. */
-template<typename T>
-T Get(const FlagSet& fs, std::string_view name) {
-    auto f = fs.Lookup(name);
-    if (f) {
-        return f->As<T>();
-    }
-    return T{};
+template <typename T> T Get(const FlagSet &fs, std::string_view name) {
+  auto f = fs.Lookup(name);
+  if (f) {
+    return f->As<T>();
+  }
+  return T{};
 }
 
 } // namespace cli
