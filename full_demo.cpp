@@ -5,12 +5,16 @@
  int main(int argc, char** argv) { 
      cli::FlagSet fs("full_demo", "A full demo for FlagSet") ; 
  
-     auto portFlag = fs.Int("port", 8080, "port to listen on" ); 
-     auto debugFlag = fs.Bool("debug", false, "enable debug logging" ); 
-     fs.Float("ratio", 1.0f, "ratio for calculation" ); 
-     fs.String("mode", "fast", "running mode" ); 
+     auto portFlag = fs.Int("port", 8080, "port to listen on", 'p'); 
+     auto debugFlag = fs.Bool("debug", false, "enable debug logging", 'd'); 
+     auto ratioFlag = fs.Float("ratio", 1.0f, "ratio for calculation", 'r'); 
+     auto modeFlag = fs.String("mode", "fast", "running mode", 'm'); 
  
      cli::ParseResult pr = fs.Parse (argc, argv); 
+     if (pr.kind == cli::ParseErrorKind::HelpRequested) {
+         fs.PrintUsage(std::cout);
+         return 0;
+     }
      if  (!pr) { 
          fs.PrintError (pr, std::cerr); 
          std::cerr << "\n" ; 
@@ -18,14 +22,11 @@
          return 2 ; 
      } 
  
-     // Accessing values: 
-     // Method 1: Use the Flag* returned from the definition (most efficient). 
+     // Accessing values using the Flag* pointers returned during definition. 
      auto port  = portFlag->As<int64_t>(); 
      auto dbg   = debugFlag->As<bool>(); 
- 
-     // Method 2: Use the Get<T> helper function (convenient). 
-     auto ratio = cli::Get<double>(fs, "ratio"); 
-     auto mode  = cli::Get<std::string>(fs, "mode"); 
+     auto ratio = ratioFlag->As<double>(); 
+     auto mode  = modeFlag->As<std::string>(); 
  
      std::cout << "=== Final Configuration ===\n" ; 
      std::cout << "port  = " << port << "\n" ; 

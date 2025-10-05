@@ -17,16 +17,16 @@ To use the library, simply include the `cppflag.hpp` header file in your project
 
 ### 1. Defining Flags
 
-First, create a `FlagSet` object. Then, define your flags using the `Int`, `Float`, `Bool`, and `String` methods.
+First, create a `FlagSet` object. Then, define your flags using the `Int`, `Float`, `Bool`, and `String` methods. You can also provide an optional short name alias for each flag.
 
 ```cpp
 #include "cppflag.hpp"
 
 cli::FlagSet fs("my_app", "An example application");
-fs.Int("port", 8080, "port to listen on");
-fs.Bool("debug", false, "enable debug logging");
-fs.Float("ratio", 1.5, "a float value");
-fs.String("mode", "fast", "running mode");
+fs.Int("port", 8080, "port to listen on", 'p');
+fs.Bool("debug", false, "enable debug logging", 'd');
+fs.Float("ratio", 1.5, "a float value", 'r');
+fs.String("mode", "fast", "running mode", 'm');
 ```
 
 ### 2. Parsing Arguments
@@ -87,31 +87,39 @@ if (fs.IsSet("port")) {
 }
 ```
 
+### 6. Help Message
+
+The library automatically defines a `--help` (with a short alias `-h`) flag for you. When this flag is used, the `Parse` method will return a result with `kind` equal to `cli::ParseErrorKind::HelpRequested`. You can check for this and print the usage information.
+
+```cpp
+cli::ParseResult pr = fs.Parse(argc, argv);
+if (pr.kind == cli::ParseErrorKind::HelpRequested) {
+    fs.PrintUsage(std::cout);
+    return 0;
+}
+```
+
+The help message includes the usage string and a list of all defined flags with their descriptions and default values.
+
+```
+Usage: full_demo [flags]
+A full demo for FlagSet
+
+Flags:
+  -p, --port	port to listen on (default: 8080)
+  -d, --debug	enable debug logging (default: false)
+  -r, --ratio	ratio for calculation (default: 1.000000)
+  -m, --mode	running mode (default: fast)
+  -h, --help	show this help message (default: false)
+```
+
 ## Full Example
 
-A complete example can be found in `examples/full_demo.cpp`.
+A complete example can be found in `full_demo.cpp`.
 
 To compile and run the example:
 
 ```bash
 g++ -std=c++17 full_demo.cpp -o full_demo_app
 ./full_demo_app --port=-9090 --debug --ratio=2.5 arg1 arg2
-```
-
-This will produce the following output:
-
-```
-=== Final Configuration ===
-port  = -9090
-debug = true
-ratio = 2.5
-mode  = fast
-Which were set by user?
-  port: user
-  debug: user
-  ratio: user
-  mode: default
-Positional arguments:
-  - arg1
-  - arg2
 ```

@@ -12,6 +12,7 @@ namespace cli {
 
 enum class ParseErrorKind {
   None,
+  HelpRequested,
   UnknownFlag,
   MissingValue,
   InvalidValue,
@@ -34,6 +35,8 @@ public:
                    std::string &err) = 0;
   /* TypeName returns the type name of the value. */
   virtual std::string TypeName() const = 0;
+  /* ToString returns the string representation of the value. */
+  virtual std::string ToString() const = 0;
   /* clone returns a copy of the value object. */
   virtual IValue* clone() const = 0;
 };
@@ -100,6 +103,16 @@ public:
     return true;
   }
 
+  std::string ToString() const override {
+    if constexpr (std::is_same<T, bool>::value) {
+        return value_ ? "true" : "false";
+    } else if constexpr (std::is_same<T, std::string>::value) {
+        return value_;
+    } else {
+        return std::to_string(value_);
+    }
+  }
+
   std::string TypeName() const override { return type_name_; }
   const T &Get() const { return value_; }
   virtual IValue* clone() const override { return new ValueAdapter<T>(value_); }
@@ -112,6 +125,7 @@ private:
 
 struct Flag {
   std::string name;
+  char short_name = 0;
   std::string usage;
   std::unique_ptr<IValue> value;
   std::unique_ptr<IValue> default_value;
@@ -133,14 +147,14 @@ public:
   /* FlagSet creates a new, empty flag set with the specified name and description. */
   explicit FlagSet(std::string name, std::string desc = {});
   /* Int defines a int64_t flag with specified name, default value, and usage string. */
-  Flag *Int(std::string_view name, int64_t defaultVal, std::string_view usage);
+  Flag *Int(std::string_view name, int64_t defaultVal, std::string_view usage, char short_name = 0);
   /* Float defines a double flag with specified name, default value, and usage string. */
-  Flag *Float(std::string_view name, double defaultVal, std::string_view usage);
+  Flag *Float(std::string_view name, double defaultVal, std::string_view usage, char short_name = 0);
   /* Bool defines a bool flag with specified name, default value, and usage string. */
-  Flag *Bool(std::string_view name, bool defaultVal, std::string_view usage);
+  Flag *Bool(std::string_view name, bool defaultVal, std::string_view usage, char short_name = 0);
   /* String defines a string flag with specified name, default value, and usage string. */
   Flag *String(std::string_view name, std::string_view defaultVal,
-               std::string_view usage);
+               std::string_view usage, char short_name = 0);
 
   /* Parse parses flag definitions from the argument list, which should not include the command name.
      It returns a ParseResult indicating success or failure. */
@@ -163,48 +177,55 @@ private:
   std::string desc_;
   std::vector<std::unique_ptr<Flag>> flags_;
   std::unordered_map<std::string_view, Flag *> index_;
+  std::unordered_map<char, Flag *> short_index_;
   std::vector<std::string> positional_;
   template <typename T>
-  Flag* AddFlag(std::string_view name, T defaultVal, std::string_view usage);
+  Flag* AddFlag(std::string_view name, char short_name, T defaultVal, std::string_view usage);
 };
 
 FlagSet::FlagSet(std::string name, std::string desc) {
   name_ = name;
   desc_ = desc;
+  Bool("help", false, "show this help message", 'h');
 }
 
 template <typename T>
-Flag* FlagSet::AddFlag(std::string_view name, T defaultVal, std::string_view usage) {
+Flag* FlagSet::AddFlag(std::string_view name, char short_name, T defaultVal, std::string_view usage) {
   auto ptr = std::make_unique<Flag>();
   ptr->name = name;
   ptr->usage = usage;
+  ptr->short_name = short_name;
   auto v_ptr = std::make_unique<ValueAdapter<T>>(defaultVal);
   ptr->default_value = std::unique_ptr<IValue>(v_ptr->clone());
   ptr->value = std::move(v_ptr);
   ptr->set = false;
   this->flags_.emplace_back(std::move(ptr));
-  this->index_[name] = this->flags_.back().get();
-  return this->flags_.back().get();
+  Flag* flag_ptr = this->flags_.back().get();
+  this->index_[name] = flag_ptr;
+  if (short_name != 0) {
+      this->short_index_[short_name] = flag_ptr;
+  }
+  return flag_ptr;
 }
 
 Flag *FlagSet::Int(std::string_view name, int64_t defaultVal,
-                   std::string_view usage) {
-  return AddFlag<int64_t>(name, defaultVal, usage);
+                   std::string_view usage, char short_name) {
+  return AddFlag<int64_t>(name, short_name, defaultVal, usage);
 }
 
 Flag *FlagSet::Float(std::string_view name, double defaultVal,
-                     std::string_view usage) {
-  return AddFlag<double>(name, defaultVal, usage);
+                     std::string_view usage, char short_name) {
+  return AddFlag<double>(name, short_name, defaultVal, usage);
 }
 
 Flag *FlagSet::Bool(std::string_view name, bool defaultVal,
-                    std::string_view usage) {
-  return AddFlag<bool>(name, defaultVal, usage);
+                    std::string_view usage, char short_name) {
+  return AddFlag<bool>(name, short_name, defaultVal, usage);
 }
 
 Flag *FlagSet::String(std::string_view name, std::string_view defaultVal,
-                      std::string_view usage) {
-  return AddFlag<std::string>(name, std::string(defaultVal), usage);
+                      std::string_view usage, char short_name) {
+  return AddFlag<std::string>(name, short_name, std::string(defaultVal), usage);
 }
 
 /* Parse parses flag definitions from the argument list, which should not include the command name.
@@ -220,6 +241,10 @@ ParseResult FlagSet::Parse(int argc, char** argv) {
   
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
+
+    if (arg == "--help" || arg == "-h" || arg == "-help") {
+        return {ParseErrorKind::HelpRequested, "", ""};
+    }
 
     if (no_more_flags) {
         positional_.push_back(arg);
@@ -276,30 +301,33 @@ ParseResult FlagSet::Parse(int argc, char** argv) {
       flag->set = true;
     }
     // handle short options -f value or -fvalue
-    else if (arg.size() > 1) {
-      std::string flag_name = arg.substr(1, 1);
-      std::string value;
-      
-      if (arg.size() > 2) {
-        // -fvalue format
-        value = arg.substr(2);
-      } else if (i + 1 < argc && argv[i + 1][0] != '-') {
-        // -f value format
-        value = argv[++i];
-      } else {
-        // boolean flag, no value
-        value = "1";
+    else if (arg.size() > 1 && arg[0] == '-' && arg[1] != '-') {
+      char flag_char = arg[1];
+      auto it = short_index_.find(flag_char);
+      if (it == short_index_.end()) {
+          return ParseResult{ParseErrorKind::UnknownFlag, std::string(1, flag_char), "unknown flag: -" + std::string(1, flag_char)};
       }
-      
-      auto it = index_.find(flag_name);
-      if (it == index_.end()) {
-        return ParseResult{ParseErrorKind::UnknownFlag, flag_name, "unknown flag: " + flag_name};
-      }
-      
       Flag* flag = it->second;
+      std::string value;
+
+      if (arg.size() > 2) {
+          // -fvalue format
+          value = arg.substr(2);
+      } else {
+          // -f format, value might be next arg, or implicit for bool
+          auto va = dynamic_cast<ValueAdapter<bool>*>(flag->value.get());
+          if (va) {
+              value = "true";
+          } else if (i + 1 < argc) {
+              value = argv[++i];
+          } else {
+              return ParseResult{ParseErrorKind::MissingValue, flag->name, "flag '-" + std::string(1, flag_char) + "' needs a value"};
+          }
+      }
+
       std::string error;
       if (!flag->value->Set(value, error)) {
-        return ParseResult{ParseErrorKind::InvalidValue, flag_name, "invalid value for flag '" + flag_name + "': " + error};
+          return ParseResult{ParseErrorKind::InvalidValue, flag->name, "invalid value for flag '-" + std::string(1, flag_char) + "': " + error};
       }
       flag->set = true;
     }
@@ -335,11 +363,12 @@ void FlagSet::PrintUsage(std::ostream &os) const {
   if (!flags_.empty()) {
     os << "\nFlags:\n";
     for (const auto &flag : flags_) {
-      os << "  --" << flag->name << " (" << flag->default_value->TypeName() << ")";
-      if (!flag->usage.empty()) {
-        os << "\t" << flag->usage;
+      os << "  ";
+      if (flag->short_name != 0) {
+          os << "-" << flag->short_name << ", ";
       }
-      os << "\n";
+      os << "--" << flag->name;
+      os << "\t" << flag->usage << " (default: " << flag->default_value->ToString() << ")\n";
     }
   }
 }
