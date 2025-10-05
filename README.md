@@ -45,7 +45,20 @@ if (!pr) {
 
 ### 3. Accessing Flag Values
 
-You can access the parsed values using the `Get<T>` helper function:
+There are two ways to access the parsed values:
+
+**Method 1: Use the `Flag*` pointer (most efficient)**
+
+When you define a flag, the method returns a `Flag*` pointer. You can store this pointer and use its `As<T>()` method to get the value after parsing.
+
+```cpp
+auto portFlag = fs.Int("port", 8080, "port to listen on");
+int64_t port = portFlag->As<int64_t>();
+```
+
+**Method 2: Use the `Get<T>` helper function (convenient)**
+
+This helper function looks up the flag by name and returns its value. This is more convenient if you don't want to store the `Flag*` pointers.
 
 ```cpp
 int64_t port = cli::Get<int64_t>(fs, "port");

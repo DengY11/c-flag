@@ -5,8 +5,8 @@
  int main(int argc, char** argv) { 
      cli::FlagSet fs("full_demo", "A full demo for FlagSet") ; 
  
-     fs.Int("port", 8080, "port to listen on" ); 
-     fs.Bool("debug", false, "enable debug logging" ); 
+     auto portFlag = fs.Int("port", 8080, "port to listen on" ); 
+     auto debugFlag = fs.Bool("debug", false, "enable debug logging" ); 
      fs.Float("ratio", 1.0f, "ratio for calculation" ); 
      fs.String("mode", "fast", "running mode" ); 
  
@@ -18,8 +18,12 @@
          return 2 ; 
      } 
  
-     auto port  = cli::Get<int64_t>(fs, "port"); 
-     auto dbg   = cli::Get<bool>(fs, "debug"); 
+     // Accessing values: 
+     // Method 1: Use the Flag* returned from the definition (most efficient). 
+     auto port  = portFlag->As<int64_t>(); 
+     auto dbg   = debugFlag->As<bool>(); 
+ 
+     // Method 2: Use the Get<T> helper function (convenient). 
      auto ratio = cli::Get<double>(fs, "ratio"); 
      auto mode  = cli::Get<std::string>(fs, "mode"); 
  
