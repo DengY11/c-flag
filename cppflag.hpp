@@ -42,7 +42,7 @@ public:
 
 template <typename T> class ValueAdapter : public IValue {
 public:
-  using Tp = std::decay_t<T>;
+  using Tp = std::remove_cv_t<std::decay_t<T>>;
   explicit ValueAdapter(T val) : value_(val) {
     if constexpr (std::is_same<Tp, int64_t>::value) {
       type_name_ = "int";
